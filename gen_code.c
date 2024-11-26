@@ -3,10 +3,11 @@ AST). The functions gen_code_initialize and gen_code_program are called from the
 compiler’s main (in compiler_main.c).*/
 
 #include "gen_code.h"
+#include "literal_table.h"
 
 // Initialize the code generator
 void gen_code_initialize(){
-
+    literal_table_initialize();
 }
 
 // Requires: bf is open for writing
