@@ -9,6 +9,7 @@ compiler’s main (in compiler_main.c).*/
 #include <string.h>
 #include "ast.h"
 #include "code.h"
+#include "code_utils.h"
 #include "id_use.h"
 #include "literal_table.h"
 #include "gen_code.h"
@@ -25,18 +26,18 @@ void gen_code_initialize(){
 // Requires: bf is open for writing
 // Generate code for prog into bf
 void gen_code_program(BOFFILE bf, block_t prog){
-    code_seq main_cs;
+    code_seq main_cs = code_seq_empty();
     // We want to make the main program's AR look like all blocks... so:
     // allocate space and initialize any variables
     main_cs = gen_code_var_decls(prog.var_decls);
     int vars_len_in_bytes = (code_seq_size(main_cs) / 2) * BYTES_PER_WORD;
     // there is no static link for the program as a whole,
     // so nothing to do for saving FP into A0 as would be done for a block
-    main_cs = code_seq_concat(&main_cs, code_save_registers_for_AR());
-    main_cs = code_seq_concat(&main_cs, gen_code_stmt(*prog.stmts.stmt_list.start));
-    main_cs = code_seq_concat(&main_cs, code_restore_registers_from_AR());
-    main_cs = code_seq_concat(&main_cs, code_deallocate_stack_space(vars_len_in_bytes));
-    main_cs = code_seq_add_to_end(&main_cs, code_exit());
+    code_seq_concat(&main_cs, code_utils_save_registers_for_AR());
+    code_seq_concat(&main_cs, gen_code_stmt(*prog.stmts.stmt_list.start));
+    code_seq_concat(&main_cs, code_utils_save_registers_for_AR());
+    code_seq_concat(&main_cs, code_utils_deallocate_stack_space(vars_len_in_bytes));
+    code_seq_add_to_end(&main_cs, code_exit(0));
     gen_code_output_program(bf, main_cs);
 }
 
@@ -62,11 +63,9 @@ static BOFHeader gen_code_program_header(code_seq main_cs)
     ret.text_length = code_seq_size(main_cs) * BYTES_PER_WORD;
     int dsa = MAX(ret.text_length, 1024) + BYTES_PER_WORD;
     ret.data_start_address = dsa;
-    ret.ints_length = 0; // FLOAT has no int literals
+    ret.data_length = 0; // FLOAT has no int literals
     ret.floats_length = literal_table_size() * BYTES_PER_WORD;
-    int sba = dsa
-	+ ret.data_start_address
-	+ ret.ints_length + ret.floats_length + STACK_SPACE;
+    int sba = dsa + ret.data_start_address + ret.ints_length + ret.floats_length + STACK_SPACE;
     ret.stack_bottom_addr = sba;
     return ret;
 }
@@ -219,9 +218,9 @@ code_seq gen_code_begin_stmt(begin_stmt_t stmt)
     int vars_len_in_bytes = (code_seq_size(ret) / 2) * BYTES_PER_WORD;
     // in FLOAT, surrounding scope's base is FP, so that is the static link
     ret = code_seq_add_to_end(ret, code_add(0, FP, A0));
-    ret = code_seq_concat(ret, code_save_registers_for_AR());
+    ret = code_seq_concat(ret, code_utils_save_registers_for_AR());
     ret = code_seq_concat(ret, gen_code_stmts(stmt.stmts));
-    ret = code_seq_concat(ret, code_restore_registers_from_AR());
+    ret = code_seq_concat(ret, code_utils_save_registers_for_AR());
     ret = code_seq_concat(ret, code_deallocate_stack_space(vars_len_in_bytes));
     return ret;
 }
